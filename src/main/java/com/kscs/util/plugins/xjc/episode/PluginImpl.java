@@ -57,6 +57,8 @@ import com.sun.tools.xjc.outline.ClassOutline;
 import com.sun.tools.xjc.outline.EnumOutline;
 import com.sun.tools.xjc.outline.Outline;
 import com.sun.tools.xjc.reader.Const;
+import com.sun.tools.xjc.reader.xmlschema.bindinfo.BISchemaBinding;
+import com.sun.tools.xjc.reader.xmlschema.bindinfo.BindInfo;
 import com.sun.xml.bind.v2.schemagen.episode.Bindings;
 import com.sun.xml.bind.v2.schemagen.episode.SchemaBindings;
 import com.sun.xml.txw2.TXW;
@@ -102,7 +104,7 @@ public class PluginImpl extends Plugin {
 	}
 
 	public String getUsage() {
-		return "  -Xepisode-ext <FILE>    :  generate the episode file for separate compilation";
+		return "  -Xepisode-ext [-episode-file=<FILE>]    :  generate the episode file for separate compilation. <FILE> is relative to the META-INF directory of the resulting source tree.";
 	}
 
 	public int parseArgument(final Options opt, final String[] args, int i) throws BadCommandLineException, IOException {
@@ -147,23 +149,21 @@ public class PluginImpl extends Plugin {
 		for (final OutlineAdaptor oa : outlines) {
 			final XSComponent sc = oa.schemaComponent;
 
-			if (sc == null) continue;
-			if (!(sc instanceof XSDeclaration))
-				continue;
-			final XSDeclaration decl = (XSDeclaration) sc;
-			if (decl.isLocal())
-				continue;   // local components cannot be referenced from outside, so no need to list.
+			if (sc != null && (sc instanceof XSDeclaration)) {
+				final XSDeclaration decl = (XSDeclaration) sc;
+				if (!decl.isLocal()) { // local components cannot be referenced from outside, so no need to list.
+					PerSchemaOutlineAdaptors list = perSchema.get(decl.getOwnerSchema());
+					if (list == null) {
+						list = new PerSchemaOutlineAdaptors();
+						perSchema.put(decl.getOwnerSchema(), list);
+					}
 
-			PerSchemaOutlineAdaptors list = perSchema.get(decl.getOwnerSchema());
-			if (list == null) {
-				list = new PerSchemaOutlineAdaptors();
-				perSchema.put(decl.getOwnerSchema(), list);
+					list.add(oa);
+
+					if (decl.getTargetNamespace().equals(""))
+						hasComponentInNoNamespace = true;
+				}
 			}
-
-			list.add(oa);
-
-			if (decl.getTargetNamespace().equals(""))
-				hasComponentInNoNamespace = true;
 		}
 
 		final JTextFile outFile = new JTextFile(this.episodeFile);
@@ -352,5 +352,9 @@ public class PluginImpl extends Plugin {
 			this.packageNames.add(outlineAdaptor.packageName);
 		}
 
+	}
+
+	private BISchemaBinding getSchemaBinding(final XSComponent xsComponent) {
+		return xsComponent.getOwnerSchema().getAnnotation() != null ? ((BindInfo) xsComponent.getOwnerSchema().getAnnotation().getAnnotation()).get(BISchemaBinding.class) : null;
 	}
 }
