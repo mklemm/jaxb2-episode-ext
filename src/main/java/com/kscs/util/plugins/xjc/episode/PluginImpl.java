@@ -40,15 +40,7 @@
 
 package com.kscs.util.plugins.xjc.episode;
 
-import java.io.IOException;
-import java.io.StringWriter;
-import java.util.ArrayList;
-import java.util.HashSet;
-import java.util.LinkedHashMap;
-import java.util.List;
-import java.util.Map;
-import java.util.Set;
-
+import com.sun.codemodel.fmt.JPropertyFile;
 import com.sun.codemodel.fmt.JTextFile;
 import com.sun.tools.xjc.BadCommandLineException;
 import com.sun.tools.xjc.Options;
@@ -56,6 +48,7 @@ import com.sun.tools.xjc.Plugin;
 import com.sun.tools.xjc.outline.ClassOutline;
 import com.sun.tools.xjc.outline.EnumOutline;
 import com.sun.tools.xjc.outline.Outline;
+import com.sun.tools.xjc.outline.PackageOutline;
 import com.sun.tools.xjc.reader.Const;
 import com.sun.tools.xjc.reader.xmlschema.bindinfo.BISchemaBinding;
 import com.sun.tools.xjc.reader.xmlschema.bindinfo.BindInfo;
@@ -63,29 +56,15 @@ import com.sun.xml.bind.v2.schemagen.episode.Bindings;
 import com.sun.xml.bind.v2.schemagen.episode.SchemaBindings;
 import com.sun.xml.txw2.TXW;
 import com.sun.xml.txw2.output.StreamSerializer;
-import com.sun.xml.xsom.XSAnnotation;
-import com.sun.xml.xsom.XSAttGroupDecl;
-import com.sun.xml.xsom.XSAttributeDecl;
-import com.sun.xml.xsom.XSAttributeUse;
-import com.sun.xml.xsom.XSComplexType;
-import com.sun.xml.xsom.XSComponent;
-import com.sun.xml.xsom.XSContentType;
-import com.sun.xml.xsom.XSDeclaration;
-import com.sun.xml.xsom.XSElementDecl;
-import com.sun.xml.xsom.XSFacet;
-import com.sun.xml.xsom.XSIdentityConstraint;
-import com.sun.xml.xsom.XSModelGroup;
-import com.sun.xml.xsom.XSModelGroupDecl;
-import com.sun.xml.xsom.XSNotation;
-import com.sun.xml.xsom.XSParticle;
-import com.sun.xml.xsom.XSSchema;
-import com.sun.xml.xsom.XSSimpleType;
-import com.sun.xml.xsom.XSWildcard;
-import com.sun.xml.xsom.XSXPath;
+import com.sun.xml.xsom.*;
 import com.sun.xml.xsom.visitor.XSFunction;
 import org.xml.sax.ErrorHandler;
 import org.xml.sax.SAXException;
 import org.xml.sax.SAXParseException;
+
+import java.io.IOException;
+import java.io.StringWriter;
+import java.util.*;
 
 /**
  * Creates the episode file,
@@ -96,22 +75,23 @@ import org.xml.sax.SAXParseException;
  */
 public class PluginImpl extends Plugin {
 
-	public static final String EPISODE_FILE_ARG = "-episode-file=";
-	private String episodeFile = "sun-jaxb.episode";
+	public static final String SRC_MAIN_RESOURCES = "src/main/resources/";
+	private String episodePackageName = "META-INF";
+	private String packageMappingPackageName = "META-INF";
+	private String catalogPackageName = "";
+	private String episodeFileName = "sun-jaxb.episode";
+	private String packageMappingFileName = "jaxb-packages.properties";
+	private String catalogFileName = "default.catalog";
 
 	public String getOptionName() {
 		return "Xepisode-ext";
 	}
 
 	public String getUsage() {
-		return "  -Xepisode-ext [-episode-file=<FILE>]    :  generate the episode file for separate compilation. <FILE> is relative to the META-INF directory of the resulting source tree.";
+		return "  -Xepisode-ext    :  generate the episode file for separate compilation.";
 	}
 
 	public int parseArgument(final Options opt, final String[] args, int i) throws BadCommandLineException, IOException {
-		if (args[i].equals("-Xepisode-ext")) {
-			this.episodeFile = args.length > i + 1 ? (args[i + 1].startsWith(PluginImpl.EPISODE_FILE_ARG) ? args[i + 1].substring(PluginImpl.EPISODE_FILE_ARG.length() + 1) : this.episodeFile) : this.episodeFile;
-			return 2;
-		}
 		return 0;
 	}
 
@@ -166,7 +146,7 @@ public class PluginImpl extends Plugin {
 			}
 		}
 
-		final JTextFile outFile = new JTextFile(this.episodeFile);
+		//final File episodeFile = new File(opt.targetDir, this.episodePackageName.replaceAll("\\.", "/") + "/" + this.episodeFileName);
 		try (final StringWriter stringWriter = new StringWriter()) {
 			final Bindings bindings = TXW.create(Bindings.class, new StreamSerializer(stringWriter));
 			if (hasComponentInNoNamespace) // otherwise jaxb binding NS should be the default namespace
@@ -204,13 +184,57 @@ public class PluginImpl extends Plugin {
 			}
 
 			bindings.commit();
-			outFile.setContents(stringWriter.toString());
-			model.getCodeModel().rootPackage().subPackage("META-INF").addResourceFile(outFile);
-			return true;
+
+			final JTextFile jTextFile = new JTextFile(this.episodeFileName);
+			jTextFile.setContents(stringWriter.toString());
+			model.getModel().codeModel._package(this.episodePackageName).addResourceFile(jTextFile);
 		} catch (final IOException e) {
-			errorHandler.error(new SAXParseException("Failed to write to " + this.episodeFile, null, e));
+			errorHandler.error(new SAXParseException("Failed to write to " + this.episodeFileName, null, e));
 			return false;
 		}
+
+		generatePackageMapping(model);
+
+		generateCatalog(model, opt, outlines);
+		return true;
+	}
+
+	private void generatePackageMapping(final Outline model) {
+		final JPropertyFile mappingFile = new JPropertyFile(this.packageMappingFileName);
+
+		for(final PackageOutline packageOutline : model.getAllPackageContexts()) {
+
+			final String name = packageOutline._package().name();
+			final String namespaceURI = packageOutline.getMostUsedNamespaceURI();
+			mappingFile.add(name, namespaceURI == null ? "" : namespaceURI);
+		}
+
+		model.getCodeModel()._package(this.packageMappingPackageName).addResourceFile(mappingFile);
+	}
+
+	private void generateCatalog(final Outline model, final Options opt, final List<OutlineAdaptor> publicSchemComponents) {
+		final JTextFile catalogFile = new JTextFile(this.catalogFileName);
+
+		final Map<String,String> systemIds = new HashMap<>();
+		for(final OutlineAdaptor outlineAdaptor:publicSchemComponents) {
+			systemIds.put(outlineAdaptor.schemaComponent.getSourceDocument().getTargetNamespace(), outlineAdaptor.schemaComponent.getSourceDocument().getSystemId());
+		}
+
+		final StringBuilder stringBuilder = new StringBuilder();
+		for(final Map.Entry<String,String> entry : systemIds.entrySet()) {
+			final String systemId = entry.getValue();
+			final int pos = systemId.indexOf(PluginImpl.SRC_MAIN_RESOURCES);
+			if(pos >= 0) {
+				final String relativePath = systemId.substring(pos + PluginImpl.SRC_MAIN_RESOURCES.length());
+				stringBuilder.append("PUBLIC \"");
+				stringBuilder.append(entry.getKey());
+				stringBuilder.append("\" \"");
+				stringBuilder.append(relativePath);
+				stringBuilder.append("\"\n");
+			}
+		}
+		catalogFile.setContents(stringBuilder.toString());
+		model.getCodeModel()._package(this.catalogPackageName).addResourceFile(catalogFile);
 	}
 
 	/**
