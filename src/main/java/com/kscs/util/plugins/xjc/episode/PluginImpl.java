@@ -49,6 +49,8 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
+import com.sun.codemodel.JCodeModel;
+import com.sun.codemodel.JDefinedClass;
 import com.sun.codemodel.fmt.JPropertyFile;
 import com.sun.codemodel.fmt.JTextFile;
 import com.sun.tools.xjc.BadCommandLineException;
@@ -97,8 +99,10 @@ import org.xml.sax.SAXParseException;
  * @author Mirko Klemm
  */
 public class PluginImpl extends Plugin {
+	public static final String XML_NS = "http://www.w3.org/XML/1998/namespace";
 
 	public static final String SRC_MAIN_RESOURCES = "src/main/resources/";
+	public static final String KSCS_BINDINGS_NS = "http://www.kscs.com/util/jaxb/bindings";
 	private String episodePackageName = "META-INF";
 	private String packageMappingPackageName = "META-INF";
 	private String catalogPackageName = "";
@@ -135,8 +139,13 @@ public class PluginImpl extends Plugin {
 			final XSComponent sc = co.target.getSchemaComponent();
 			final String fullName = co.implClass.fullName();
 			final String packageName = co.implClass.getPackage().name();
-			final OutlineAdaptor adaptor = new OutlineAdaptor(sc,
-					OutlineAdaptor.OutlineType.CLASS, fullName, packageName);
+			final OutlineAdaptor adaptor;
+//			if(isInterface(co)) {
+//				final XSComponent schemaComponent = findGroupDeclaration(model, (XSDeclaration)sc);
+//				adaptor = new OutlineAdaptor(schemaComponent, OutlineAdaptor.OutlineType.INTERFACE, fullName, packageName);
+//			} else {
+				adaptor = new OutlineAdaptor(sc, OutlineAdaptor.OutlineType.CLASS, fullName, packageName);
+//			}
 			outlines.add(adaptor);
 		}
 
@@ -176,6 +185,7 @@ public class PluginImpl extends Plugin {
 				bindings._namespace(Const.JAXB_NSURI, "jaxb");
 			else
 				bindings._namespace(Const.JAXB_NSURI, "");
+//			bindings._namespace(PluginImpl.KSCS_BINDINGS_NS, "kscs");
 			bindings.version("2.1");
 			bindings._comment("\n\n" + opt.getPrologComment() + "\n  ");
 
@@ -184,10 +194,13 @@ public class PluginImpl extends Plugin {
 				final PerSchemaOutlineAdaptors ps = e.getValue();
 				final Bindings group = bindings.bindings();
 				final String tns = e.getKey().getTargetNamespace();
-				if (!tns.equals(""))
+				if(PluginImpl.XML_NS.equals(tns)) {
+					group._namespace(tns, "xml");
+				} else if (!tns.equals("")) {
 					group._namespace(tns, "tns");
+				}
 
-				group.scd("x-schema::" + (tns.equals("") ? "" : "tns"));
+				group.scd("x-schema::" + (tns.equals("") ? "" : (PluginImpl.XML_NS.equals(tns) ? "xml" : "tns")));
 				group._attribute("if-exists", "true");
 
 				final SchemaBindings schemaBindings = group.schemaBindings();
@@ -220,6 +233,18 @@ public class PluginImpl extends Plugin {
 
 		generateCatalog(model, opt, outlines);
 		return true;
+	}
+
+	private boolean isInterface(final ClassOutline co) {
+		final JCodeModel codeModel = co.parent().getCodeModel();
+		final JDefinedClass foundClass = codeModel._getClass(co.implClass.fullName());
+		return foundClass != null && foundClass.isInterface();
+	}
+
+	private XSDeclaration findGroupDeclaration(final Outline model, final XSComponent derivedComponent) {
+		final XSDeclaration decl = (XSDeclaration)derivedComponent;
+		final XSAttGroupDecl attGroupDecl = model.getModel().schemaComponent.getAttGroupDecl(decl.getTargetNamespace(), decl.getName());
+		return attGroupDecl == null ? model.getModel().schemaComponent.getModelGroupDecl(decl.getTargetNamespace(), decl.getName()) : attGroupDecl;
 	}
 
 	private void generatePackageMapping(final Outline model) {
@@ -266,10 +291,13 @@ public class PluginImpl extends Plugin {
 	 */
 	private static final XSFunction<String> SCD = new XSFunction<String>() {
 		private String name(final XSDeclaration decl) {
-			if (decl.getTargetNamespace().equals(""))
+			if (decl.getTargetNamespace().equals("")) {
 				return decl.getName();
-			else
+			} else if(PluginImpl.XML_NS.equals(decl.getTargetNamespace())) {
+				return "xml:" + decl.getName();
+			} else {
 				return "tns:" + decl.getName();
+			}
 		}
 
 		public String complexType(final XSComplexType type) {
@@ -290,7 +318,7 @@ public class PluginImpl extends Plugin {
 		}
 
 		public String attGroupDecl(final XSAttGroupDecl decl) {
-			throw new UnsupportedOperationException();
+			return "attributeGroup::"+name(decl);
 		}
 
 		public String attributeDecl(final XSAttributeDecl decl) {
@@ -334,7 +362,7 @@ public class PluginImpl extends Plugin {
 		}
 
 		public String modelGroupDecl(final XSModelGroupDecl decl) {
-			throw new UnsupportedOperationException();
+			return "group::"+name(decl);
 		}
 
 		public String modelGroup(final XSModelGroup group) {
@@ -355,7 +383,12 @@ public class PluginImpl extends Plugin {
 				public void build(final OutlineAdaptor adaptor, final Bindings bindings) {
 					bindings.typesafeEnumClass().ref(adaptor.implName);
 				}
-			});
+			}),
+			INTERFACE(new BindingsBuilder() {
+							public void build(final OutlineAdaptor adaptor, final Bindings bindings) {
+								bindings._element(PluginImpl.KSCS_BINDINGS_NS, "interface", Interface.class).ref(adaptor.implName);
+							}
+						});
 
 			private final BindingsBuilder bindingsBuilder;
 
