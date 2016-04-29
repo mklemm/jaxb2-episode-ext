@@ -22,7 +22,7 @@
  * THE SOFTWARE.
  */
 
-package com.kscs.util.plugins.xjc.episode;
+package net.codesup.jaxb.plugins.episode;
 
 import com.sun.xml.txw2.annotation.XmlAttribute;
 import com.sun.xml.txw2.TypedXmlWriter;

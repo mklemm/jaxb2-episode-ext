@@ -38,7 +38,7 @@
  * holder.
  */
 
-package com.kscs.util.plugins.xjc.episode;
+package net.codesup.jaxb.plugins.episode;
 
 import java.io.IOException;
 import java.io.StringWriter;
@@ -49,6 +49,11 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
+
+import org.xml.sax.ErrorHandler;
+import org.xml.sax.SAXException;
+import org.xml.sax.SAXParseException;
+
 import com.sun.codemodel.JCodeModel;
 import com.sun.codemodel.JDefinedClass;
 import com.sun.codemodel.fmt.JPropertyFile;
@@ -87,9 +92,6 @@ import com.sun.xml.xsom.XSSimpleType;
 import com.sun.xml.xsom.XSWildcard;
 import com.sun.xml.xsom.XSXPath;
 import com.sun.xml.xsom.visitor.XSFunction;
-import org.xml.sax.ErrorHandler;
-import org.xml.sax.SAXException;
-import org.xml.sax.SAXParseException;
 
 /**
  * Creates the episode file,

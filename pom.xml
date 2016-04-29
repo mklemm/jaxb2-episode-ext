@@ -8,12 +8,19 @@
 	<version>1.1.1-SNAPSHOT</version>
 
 	<parent>
-		<groupId>com.kscs.util</groupId>
+		<groupId>net.codesup.util</groupId>
 		<artifactId>jaxb-plugin-parent</artifactId>
-		<version>1.0.0</version>
+		<version>1.1.0</version>
 	</parent>
 
 	<name>JAXB 2.2 extended episode plugin</name>
+	<description>
+		Extended episode generation plugin based on the JAXB XJC
+		standard plugin's source code that fixes some problems with the old
+		plugin, i.e. it adds attributes to ignore unused declarations which
+		gave an error in the original plugin.
+	</description>
+	<url>http://github.com/mklemm/jaxb2-episode-ext</url>
 	<packaging>jar</packaging>
 
 	<scm>
