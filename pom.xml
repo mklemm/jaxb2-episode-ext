@@ -5,7 +5,7 @@
 	<modelVersion>4.0.0</modelVersion>
 
 	<artifactId>jaxb2-episode-ext</artifactId>
-	<version>1.1.1-SNAPSHOT</version>
+	<version>1.2.0</version>
 
 	<parent>
 		<groupId>net.codesup.util</groupId>
@@ -27,6 +27,7 @@
 		<connection>scm:git:https://github.com/mklemm/jaxb2-episode-ext.git</connection>
 		<developerConnection>scm:git:https://github.com/mklemm/jaxb2-episode-ext.git</developerConnection>
 		<url>https://github.com/mklemm/jaxb2-episode-ext.git</url>
-	</scm>
+	  <tag>jaxb2-episode-ext-1.2.0</tag>
+  </scm>
 
 </project>
